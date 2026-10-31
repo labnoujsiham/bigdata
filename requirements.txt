@@ -1,0 +1,7 @@
+pymongo
+pyspark
+faker
+streamlit
+plotly
+pandas
+python-dotenv
