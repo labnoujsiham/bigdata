@@ -1,0 +1,6 @@
+kind,configuration,mean_ms,median_ms,p95_ms,max_ms
+write,w:1,7.577,5.111,18.512,80.864
+write,w:majority,16.313,14.65,24.574,144.631
+read,primary + local,4.326,4.26,6.174,11.296
+read,primary + majority,3.955,3.733,6.012,8.543
+read,secondary + local,5.999,4.412,10.216,108.565
