@@ -245,8 +245,16 @@ QUERIES = {
 
 
 if __name__ == "__main__":
-    # keep the order T2, T3, T8: T3 and T8 work on the mission created by T2
-    for qid in ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"]:
+    # python queries/btissam_queries/transactional.py          -> all queries
+    # python queries/btissam_queries/transactional.py T5 T6    -> only these ones
+    # Keep the order T2, T3, T8 when you run them one by one: T3 and T8 work on the
+    # mission created by T2.
+    wanted = [a.upper() for a in sys.argv[1:]] or \
+        ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"]
+    for qid in wanted:
+        if qid not in QUERIES:
+            print("%s: unknown query (choose from %s)" % (qid, ", ".join(QUERIES)))
+            continue
         func, args = QUERIES[qid]
         result = timed(qid, func, *args)
         if isinstance(result, list):

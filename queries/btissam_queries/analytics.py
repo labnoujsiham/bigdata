@@ -134,7 +134,13 @@ QUERIES = {
 
 
 if __name__ == "__main__":
-    for qid in ["A16", "A17", "A18", "A19", "A20"]:
+    # python queries/btissam_queries/analytics.py              -> all queries
+    # python queries/btissam_queries/analytics.py A17 A20      -> only these ones
+    wanted = [a.upper() for a in sys.argv[1:]] or ["A16", "A17", "A18", "A19", "A20"]
+    for qid in wanted:
+        if qid not in QUERIES:
+            print("%s: unknown query (choose from %s)" % (qid, ", ".join(QUERIES)))
+            continue
         func, args = QUERIES[qid]
         rows = timed(qid, func, *args)
         print("   ->", len(rows), "rows")
