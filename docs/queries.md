@@ -26,16 +26,16 @@ Raw numbers: `results/benchmark_results.csv`.
 | A18 | Missions per depot and status (index `depot, status`) | Btissam | queries/btissam_queries/analytics.py | 12.68 | done (24 rows) |
 | A19 | Late missions per depot (late rate, average delay) | Btissam | queries/btissam_queries/analytics.py | 20.41 | done (6 rows) |
 | A20 | Vehicles seen within 5 km of a point (2dsphere index) | Btissam | queries/btissam_queries/analytics.py | 33.42 | done (10 rows) |
-| A21 | (to be filled by Person C) | Person C | | | todo |
-| A22 | (to be filled by Person C) | Person C | | | todo |
-| A23 | (to be filled by Person C) | Person C | | | todo |
+| A21 | Vehicles with no GPS position for over 1 hour, per depot (reference: newest position in the data) | Person C | queries/c_queries/analytics.py | 7.05 | done (6 rows) |
+| A22 | Driving events per depot and event type, with the average value | Person C | queries/c_queries/analytics.py | 1075.44 | done (24 rows) |
+| A23 | Maintenance count, total and average cost per vehicle type | Person C | queries/c_queries/analytics.py | 160.74 | done (4 rows) |
 | A24 | Vehicles whose last maintenance is over 6 months old | Siham | queries/siham_queries/a24_old_maintenance.py | 6.16 | done (535 rows) |
 | A25 | Average mission duration per depot | Siham | queries/siham_queries/a25_avg_mission_duration.py | 14.65 | done (6 rows, one per depot) |
-| S26 | (to be filled by Person C) | Person C | | | todo |
-| S27 | (to be filled by Person C) | Person C | | | todo |
-| S28 | Unplanned stops | Person C | | | todo |
-| S29 | GPS anomalies | Person C | | | todo |
-| S30 | Fuel theft | Person C | | | todo |
+| S26 | Top 10 vehicles by distance travelled, with average speed (Spark) | Person C | spark/spark_queries.py | 5040.28 | done (10 rows) |
+| S27 | Average speed per hour of the day (Spark) | Person C | spark/spark_queries.py | 1945.84 | done (24 rows) |
+| S28 | Unplanned stops: engine off and speed 0 for at least 15 minutes (Spark) | Person C | spark/spark_queries.py | 5870.80 | done (200 rows) |
+| S29 | GPS anomalies: isolated positions reached and left at over 200 km/h (Spark) | Person C | spark/spark_queries.py | 5781.76 | done (40 rows) |
+| S30 | Fuel theft: fuel drop of 10 points or more during a stop (Spark) | Person C | spark/spark_queries.py | 4604.58 | done (15 rows) |
 
 Notes:
 - T14 is measured on 200 fake positions inserted just before each run (vehicle `V_BENCH`), so real data is never deleted.
@@ -45,3 +45,5 @@ Notes:
   T5 67.28 ms and 161,995 documents examined without index, 4.02 ms and 212 documents with index;
   T10 6.00 ms and 10,001 documents without index, 1.45 ms and 8 documents with index;
   T6 1.86 ms and 1,500 documents without index, 1.06 ms and 1 document with index.
+- S26-S30 run on Spark (2 workers, 1 core each): median of 10 timed runs after one warm-up run, measured by `spark/spark_queries.py` (`results/spark_results.csv`), not by `benchmark.py`.
+- Native vs Spark comparison for A22, A23 and S27 (same results, same machine): native 1193.51 / 143.57 / 197.22 ms, Spark 2958.79 / 1319.33 / 1696.24 ms. Details: `results/native_vs_spark.csv` (`benchmarks/compare_native.py`).

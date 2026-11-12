@@ -1,0 +1,12 @@
+﻿:: loading settings :: url = jar:file:/opt/spark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
+id,repeats,median_ms,mean_ms,min_ms,max_ms,rows
+S26,10,5040.28,6001.88,3420.47,15257.05,10
+S26 sample: [Row(vehicle_id='V0588', total_km=229.8, avg_speed_kmh=55.2, n_positions=608), Row(vehicle_id='V1240', total_km=198.7, avg_speed_kmh=51.1, n_positions=467)]
+S27,10,1945.84,2006.87,1323.11,2776.10,24
+S27 sample: [Row(hour=0, avg_speed_kmh=51.6, n_positions=6234), Row(hour=1, avg_speed_kmh=52.1, n_positions=6288)]
+S28,10,5870.80,6278.67,4490.04,8527.69,200
+S28 sample: [Row(vehicle_id='V0033', start=datetime.datetime(2026, 10, 15, 3, 11, 24, 817000), duration_min=59.5, lat=34.008102466666664, lon=-6.953722091666663), Row(vehicle_id='V0162', start=datetime.datetime(2026, 10, 27, 18, 12, 43, 191000), duration_min=59.5, lat=33.88816545833335, lon=-6.810772675000002)]
+S29,10,5781.76,5639.33,4155.20,7493.27,40
+S29 sample: [Row(vehicle_id='V0001', ts=datetime.datetime(2026, 11, 9, 6, 11, 18, 591000), lat=33.607312, lon=-7.63628, implied_kmh=885.0), Row(vehicle_id='V0026', ts=datetime.datetime(2026, 10, 27, 20, 18, 3, 373000), lat=31.812114, lon=-7.900827, implied_kmh=727.0)]
+S30,10,4604.58,4704.50,3709.50,6183.19,15
+S30 sample: [Row(vehicle_id='V0089', depot='Fes', start=datetime.datetime(2026, 10, 25, 9, 12, 57, 876000), duration_min=44.5, fuel_drop=23.5, litres=70.5), Row(vehicle_id='V0251', depot='Marrakech', start=datetime.datetime(2026, 10, 16, 5, 52, 54, 312000), duration_min=42.5, fuel_drop=23.5, litres=18.8)]
