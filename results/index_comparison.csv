@@ -1,7 +1,8 @@
+
 query,variant,stage,returned,keys_examined,docs_examined,median_ms,mean_ms
-T5,with index,IXSCAN,212,212,212,20.87,21.18
-T5,without index,COLLSCAN,212,0,161990,145.61,163.35
-T10,with index,IXSCAN,7,7,7,4.64,5.37
-T10,without index,COLLSCAN,7,0,10000,12.96,16.71
-T6,without index,COLLSCAN,1,0,1500,8.64,8.59
-T6,with index,IXSCAN,1,1,1,3.22,3.32
+T5,with index,IXSCAN,212,212,212,57.14,56.48
+T5,without index,COLLSCAN,212,0,161990,151.17,154.93
+T10,with index,IXSCAN,7,7,7,10.72,12.04
+T10,without index,COLLSCAN,7,0,10000,18.14,18.84
+T6,without index,COLLSCAN,1,0,1500,12.79,13.53
+T6,with index,IXSCAN,1,1,1,12.89,14.71
