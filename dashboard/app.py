@@ -4,9 +4,17 @@ Fleet telematics dashboard (Person C).
 Run from the root of the repo (replica set running, data generated):
     streamlit run dashboard/app.py
 
-Tab 1 reads MongoDB directly (A21-A23). Tab 2 reads the results written by Spark
+Tab 1 reads MongoDB directly (A21: silent vehicles, A22: events per type and day,
+A23: average fuel level per model). Tab 2 reads the results written by Spark
 (collections spark_s26 ... spark_s30, created by: spark_queries.py --save).
 Tab 3 reads the timing files in results/.
+
+Spark result columns expected by tab 2:
+    S26: vehicle_id, day, km, n_positions
+    S27: rank, driver_id, name, km, n_events, penalty_points, score_per_100km
+    S28: vehicle_id, driver_id, mission_id, start, duration_min, lat, lon
+    S29: vehicle_id, ts, lat, lon, implied_kmh
+    S30: vehicle_id, depot, start, duration_min, fuel_drop, litres
 """
 import io
 import os
@@ -31,6 +39,15 @@ except Exception as exc:                # MongoDB not reachable
     st.error("Cannot connect to MongoDB: %s" % exc)
     st.stop()
 
+# Columns each Spark query must have (used to detect results from an older version).
+SPARK_COLUMNS = {
+    "S26": ["vehicle_id", "day", "km"],
+    "S27": ["rank", "driver_id", "name", "km", "n_events", "penalty_points", "score_per_100km"],
+    "S28": ["vehicle_id", "driver_id", "mission_id", "start", "duration_min", "lat", "lon"],
+    "S29": ["vehicle_id", "ts", "lat", "lon", "implied_kmh"],
+    "S30": ["vehicle_id", "depot", "start", "duration_min", "fuel_drop", "litres"],
+}
+
 
 # ------------------------------------------------------------------ data access
 @st.cache_data(ttl=300)
@@ -47,14 +64,16 @@ def a21():
 
 @st.cache_data(ttl=300)
 def a22():
-    df = pd.json_normalize(native.a22_events_by_depot_and_type())
-    return df.rename(columns={"_id.depot": "depot", "_id.type": "type"})
+    df = pd.json_normalize(native.a22_events_by_type_and_day())
+    df = df.rename(columns={"_id.day": "day", "_id.type": "type"})
+    df["day"] = pd.to_datetime(df["day"])
+    return df
 
 
 @st.cache_data(ttl=300)
 def a23():
-    df = pd.DataFrame(native.a23_maintenance_cost_by_vehicle_type())
-    return df.rename(columns={"_id": "vehicle_type"})
+    df = pd.DataFrame(native.a23_avg_fuel_by_model())
+    return df.rename(columns={"_id": "model"})
 
 
 @st.cache_data(ttl=300)
@@ -75,9 +94,15 @@ def read_timing_csv(name):
 
 
 def need_spark(df, qid):
+    """True (and shows a message) if there is nothing usable to display for qid."""
     if df.empty:
         st.info("No data for %s yet. Run spark_queries.py with --save "
-                "(see the docstring of dashboard/app.py)." % qid)
+                "(see the docstring of spark_queries.py)." % qid)
+        return True
+    missing = [c for c in SPARK_COLUMNS[qid] if c not in df.columns]
+    if missing:
+        st.warning("The stored %s results are in an old format (missing: %s). "
+                   "Re-run spark_queries.py --only %s --save." % (qid, ", ".join(missing), qid))
         return True
     return False
 
@@ -96,56 +121,86 @@ tab1, tab2, tab3 = st.tabs(["Fleet (MongoDB)", "Spark analyses (S26-S30)", "Nati
 with tab1:
     left, right = st.columns(2)
     with left:
-        st.subheader("A21 - Silent vehicles per depot")
-        st.caption("No GPS position during the last hour (reference: newest position in the data).")
+        st.subheader("A21 - Vehicles with no position for 1 h")
+        st.caption("Per depot. Reference: newest position in the data.")
         df = a21()
+        st.metric("Silent vehicles", int(df["silent_vehicles"].sum()))
         st.plotly_chart(px.bar(df, x="depot", y="silent_vehicles", text="silent_vehicles"))
     with right:
-        st.subheader("A23 - Maintenance cost per vehicle type")
+        st.subheader("A23 - Average fuel level per model")
+        st.caption("Percent of the tank, average over all GPS positions.")
         df = a23()
-        st.plotly_chart(px.bar(df, x="vehicle_type", y="total_cost",
-                               hover_data=["maintenances", "avg_cost"]))
-    st.subheader("A22 - Driving events per depot and type")
+        st.plotly_chart(px.bar(df.sort_values("avg_fuel_level"), x="model", y="avg_fuel_level",
+                               color="brand", hover_data=["vehicles", "positions"]))
+    st.subheader("A22 - Driving events per type and per day")
     df = a22()
-    st.plotly_chart(px.bar(df, x="depot", y="events", color="type", barmode="group"))
+    st.plotly_chart(px.bar(df, x="day", y="events", color="type", barmode="stack",
+                           hover_data=["avg_value"]))
 
 # ------------------------------------------------------------------ tab 2
 with tab2:
+    # ---- S26 and S27
     left, right = st.columns(2)
     with left:
-        st.subheader("S26 - Top 10 vehicles by distance")
+        st.subheader("S26 - Real distance per vehicle and per day")
+        st.caption("Haversine distance between consecutive positions, summed per day (UTC).")
         df = spark_df("S26")
         if not need_spark(df, "S26"):
-            st.plotly_chart(px.bar(df.sort_values("total_km", ascending=False),
-                                   x="vehicle_id", y="total_km", hover_data=["avg_speed_kmh"]))
+            df["day"] = pd.to_datetime(df["day"])
+            total = (df.groupby("vehicle_id", as_index=False)["km"].sum()
+                     .nlargest(10, "km"))
+            total["vehicle_id"] = total["vehicle_id"].astype(str)
+            st.caption("Top 10 vehicles by total distance")
+            st.plotly_chart(px.bar(total, x="vehicle_id", y="km"))
+
+            vehicles = sorted(df["vehicle_id"].astype(str).unique())
+            chosen = st.selectbox("Daily distance of vehicle", vehicles, key="s26_vehicle")
+            one = df[df["vehicle_id"].astype(str) == chosen].sort_values("day")
+            st.plotly_chart(px.bar(one, x="day", y="km", hover_data=["n_positions"]))
     with right:
-        st.subheader("S27 - Average speed per hour of the day (UTC)")
+        st.subheader("S27 - Driving score per driver")
+        st.caption("Weighted events per 100 km. Rank 1 = safest driver (lowest score).")
         df = spark_df("S27")
         if not need_spark(df, "S27"):
-            fig = px.line(df.sort_values("hour"), x="hour", y="avg_speed_kmh", markers=True)
-            fig.update_yaxes(rangemode="tozero")
-            st.plotly_chart(fig)
+            which = st.radio("Show", ["Safest 10", "Riskiest 10"], horizontal=True,
+                             key="s27_which")
+            ranked = df.sort_values(["rank", "driver_id"])
+            top = ranked.head(10) if which == "Safest 10" else ranked.tail(10)
+            st.plotly_chart(px.bar(top, x="name", y="score_per_100km",
+                                   hover_data=["rank", "km", "n_events", "penalty_points"]))
+            with st.expander("Full ranking"):
+                st.dataframe(ranked, hide_index=True)
 
-    st.subheader("S28 - Unplanned stops (engine off, 15 min or more)")
+    # ---- S28
+    st.subheader("S28 - Unplanned stops during a mission (engine off, more than 30 min)")
     df = spark_df("S28")
     if not need_spark(df, "S28"):
         m1, m2 = st.columns(2)
         m1.metric("Stops", len(df))
         m2.metric("Average duration (min)", round(df["duration_min"].mean(), 1))
-        st.map(df[["lat", "lon"]])
+        st.map(df[["lat", "lon"]].dropna())
+        with st.expander("Longest stops"):
+            st.dataframe(df.sort_values("duration_min", ascending=False).head(20),
+                         hide_index=True)
 
+    # ---- S29 and S30
     left, right = st.columns(2)
     with left:
         st.subheader("S29 - GPS anomalies")
+        st.caption("Isolated positions implying more than 200 km/h on arrival and on departure.")
         df = spark_df("S29")
         if not need_spark(df, "S29"):
             st.metric("Anomalies", len(df))
-            st.dataframe(df.sort_values("implied_kmh", ascending=False).head(10))
+            st.dataframe(df.sort_values("implied_kmh", ascending=False).head(10),
+                         hide_index=True)
     with right:
         st.subheader("S30 - Suspected fuel theft")
+        st.caption("Engine off, fuel level down by more than 20 points within 10 minutes.")
         df = spark_df("S30")
         if not need_spark(df, "S30"):
-            st.metric("Suspected thefts", len(df))
+            m1, m2 = st.columns(2)
+            m1.metric("Suspected thefts", len(df))
+            m2.metric("Litres (estimated)", round(df["litres"].sum(), 1))
             by_depot = df.groupby("depot", as_index=False)["litres"].sum()
             st.plotly_chart(px.bar(by_depot, x="depot", y="litres"))
 

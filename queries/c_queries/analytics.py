@@ -13,7 +13,7 @@ from common import db, timed
 
 # ------------------------------------------------------------------ A21
 def a21_silent_vehicles():
-    """Vehicles with no GPS position during the last hour, per depot.
+    """Vehicles with no GPS position during the last hour (counted per depot).
 
     Reads the embedded copy vehicles.last_position (no join with positions).
     The reference time is the most recent position in the data, not the clock:
@@ -34,48 +34,53 @@ def a21_silent_vehicles():
 
 
 # ------------------------------------------------------------------ A22
-def a22_events_by_depot_and_type():
-    """Driving events per depot (of the vehicle) and event type, with the average value."""
+def a22_events_by_type_and_day():
+    """Driving events per event type and per day (UTC), with the average value."""
     pipeline = [
-        {"$lookup": {"from": "vehicles", "localField": "vehicle_id",
-                     "foreignField": "_id", "as": "vehicle"}},
-        {"$unwind": "$vehicle"},
         {"$group": {
-            "_id": {"depot": "$vehicle.depot", "type": "$type"},
+            "_id": {"day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$ts"}},
+                    "type": "$type"},
             "events": {"$sum": 1},
             "avg_value": {"$avg": "$value"},   # same unit inside one event type
         }},
         {"$project": {"events": 1, "avg_value": {"$round": ["$avg_value", 1]}}},
-        {"$sort": {"_id.depot": 1, "events": -1}},
+        {"$sort": {"_id.day": 1, "_id.type": 1}},
     ]
     return list(db["driving_events"].aggregate(pipeline))
 
 
 # ------------------------------------------------------------------ A23
-def a23_maintenance_cost_by_vehicle_type():
-    """Number of maintenances, total and average cost per vehicle type."""
+def a23_avg_fuel_by_model():
+    """Average fuel level (% of the tank) per vehicle model, from all GPS positions.
+
+    Positions are first reduced to one row per vehicle (sum and count), so the
+    $lookup on vehicles only runs on ~1,500 documents, not on every position.
+    Sum and count are kept (not an average of averages) so that every position
+    weighs the same.
+    """
     pipeline = [
-        {"$lookup": {"from": "vehicles", "localField": "vehicle_id",
+        {"$group": {"_id": "$vehicle_id",
+                    "fuel_sum": {"$sum": "$fuel_level"},
+                    "n": {"$sum": 1}}},
+        {"$lookup": {"from": "vehicles", "localField": "_id",
                      "foreignField": "_id", "as": "vehicle"}},
         {"$unwind": "$vehicle"},
-        {"$group": {
-            "_id": "$vehicle.type",
-            "maintenances": {"$sum": 1},
-            "total_cost": {"$sum": "$cost"},
-            "avg_cost": {"$avg": "$cost"},
-        }},
-        {"$project": {"maintenances": 1,
-                      "total_cost": {"$round": ["$total_cost", 2]},
-                      "avg_cost": {"$round": ["$avg_cost", 2]}}},
-        {"$sort": {"total_cost": -1}},
+        {"$group": {"_id": "$vehicle.model",
+                    "brand": {"$first": "$vehicle.brand"},
+                    "vehicles": {"$sum": 1},
+                    "positions": {"$sum": "$n"},
+                    "fuel_sum": {"$sum": "$fuel_sum"}}},
+        {"$project": {"brand": 1, "vehicles": 1, "positions": 1,
+                      "avg_fuel_level": {"$round": [{"$divide": ["$fuel_sum", "$positions"]}, 1]}}},
+        {"$sort": {"avg_fuel_level": 1}},
     ]
-    return list(db["maintenances"].aggregate(pipeline))
+    return list(db["positions"].aggregate(pipeline))
 
 
 QUERIES = {
     "A21": (a21_silent_vehicles, ()),
-    "A22": (a22_events_by_depot_and_type, ()),
-    "A23": (a23_maintenance_cost_by_vehicle_type, ()),
+    "A22": (a22_events_by_type_and_day, ()),
+    "A23": (a23_avg_fuel_by_model, ()),
 }
 
 
