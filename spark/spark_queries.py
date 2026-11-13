@@ -22,7 +22,7 @@ import time
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
-URI = "mongodb://mongo1:27017,mongo2:27018,mongo3:27019/?replicaSet=rs0"
+URI = "mongodb://192.168.141.32:27017,192.168.141.60:27017,192.168.141.171:27017/?replicaSet=rs0"
 DB = "fleet"
 
 
