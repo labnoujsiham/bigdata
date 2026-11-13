@@ -27,12 +27,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from transactional import (db, explain_stats, _t5_filter, _t10_filter,
-                           PV, PLATE, DRIVER)
+                           PV, PV_END, DRIVER)
 
 REPEATS = 20
 NO_INDEX = [("$natural", 1)]                      # forces a collection scan
 T5_INDEX = [("vehicle_id", 1), ("ts", -1)]
 T10_INDEX = [("driver_id", 1), ("planned_start", 1)]
+
+
+def _sample_plate():
+    """Plate of one existing vehicle (used for the T6 comparison)."""
+    doc = db["vehicles"].find_one({"plate": {"$exists": True}}, {"plate": 1})
+    return doc["plate"] if doc else "UNKNOWN"
+
+
+PLATE = _sample_plate()
 
 
 def make_cursor(coll, filt, sort=None, limit=0, hint=None):
@@ -72,14 +81,15 @@ def measure(label, variant, builder):
 
 
 def compare_t5(rows):
-    f = _t5_filter(PV, 60)
+    # the window ends at the vehicle's last position, so the query returns rows
+    f = _t5_filter(PV, 60, PV_END)
     for variant, hint in (("with index", T5_INDEX), ("without index", NO_INDEX)):
         rows.append(measure("T5", variant,
-                            lambda h=hint: make_cursor("positions", f, ("ts", -1), 0, h)))
+                            lambda h=hint: make_cursor("positions", f, ("ts", 1), 0, h)))
 
 
 def compare_t10(rows):
-    f = _t10_filter(DRIVER)
+    f = _t10_filter(DRIVER, 7)
     for variant, hint in (("with index", T10_INDEX), ("without index", NO_INDEX)):
         rows.append(measure("T10", variant,
                             lambda h=hint: make_cursor("missions", f, ("planned_start", -1), 20, h)))

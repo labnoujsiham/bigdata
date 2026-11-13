@@ -10,20 +10,23 @@ For every query: 1 warm-up run (not counted), then N timed runs. The script prin
 mean / median / p95 / min / max in ms and saves them in results/benchmark_results.csv.
 The median is the number to use in docs/queries.md (a single run varies a lot).
 
-Queries written by Btissam (T1-T10, A16-A20) and Siham (T11-T15, A24, A25) are loaded
-automatically. For the queries of Person C (A21-A23, S26-S30), put the path of her
-file in OTHER_REGISTRIES below. That file must expose a dict in the same format as
-transactional.py:  QUERIES = {"A21": (function, (arguments,)), ...}
-Queries that cannot be found are listed as "missing" at the end.
+Queries of Btissam (T1-T10, A16-A20), Siham (T11-T15, A24, A25) and Person C
+(A21-A23, in queries/c_queries/*.py) are loaded automatically. Files in c_queries
+must expose a dict:  QUERIES = {"A21": (function, (arguments,)), ...}
+
+Spark queries (S26-S30) run in the Spark container (see spark/spark_queries.py).
+Run them first so that results/spark_results.csv exists: this script reads it and
+merges the S26-S30 lines in benchmark_results.csv (no p95 for them).
+The spark/ folder is never imported here (PySpark is not in the .venv).
 
 Queries that change data (T1, T2, T3, T8, T11, T12, T14) are prepared and cleaned up
 around each run, so that the database is back to its original state at the end.
-For Spark queries, the warm-up run absorbs the Spark start-up time.
 """
 import argparse
 import csv
 import glob
 import importlib.util
+import io
 import math
 import os
 import statistics
@@ -42,11 +45,20 @@ client = MongoClient(config.MONGO_URI)
 client.admin.command("ping")
 db = client[config.MONGO_DB]
 
-# (path relative to the repo root, owner label): files that expose a QUERIES dict.
+# (path relative to the repo root, owner label): extra files that expose a QUERIES dict,
+# in addition to the automatic scan of PERSON_C_PATTERNS below.
 OTHER_REGISTRIES = [
-    # ("queries/c_queries/analytics.py", "Person C"),
-    # ("spark/spark_queries.py", "Person C"),
+    # ("some/other/folder/file.py", "Person C"),
 ]
+
+# Folders scanned automatically for Person C's files (only files with a QUERIES dict are used).
+# spark/ is NOT here: Spark queries run in the container and are merged from a CSV.
+PERSON_C_PATTERNS = [
+    "queries/c_queries/*.py",
+]
+IGNORED_FILES = {"common.py", "__init__.py", "config.py"}
+
+SPARK_CSV = os.path.join(ROOT, "results", "spark_results.csv")
 
 OWNERS = {}
 for i in range(1, 11):
@@ -98,10 +110,17 @@ def entry(qid, func, args=(), setup=None, cleanup=None):
             "setup": setup, "cleanup": cleanup}
 
 
-def add_registry(registry, problems, rel_path, name, owner=None):
+def add_registry(registry, problems, rel_path, name, owner=None, required=True):
+    """Loads a file exposing QUERIES. If required is False, a file without QUERIES is
+    silently ignored (used for the automatic scan)."""
     try:
         module = load_module(name, rel_path)
-        for qid, value in module.QUERIES.items():
+        queries = getattr(module, "QUERIES", None)
+        if queries is None:
+            if required:
+                problems.append("%s: no QUERIES dict found" % rel_path)
+            return
+        for qid, value in queries.items():
             func, args = value[0], value[1]
             e = entry(qid, func, args)
             if owner:
@@ -109,6 +128,24 @@ def add_registry(registry, problems, rel_path, name, owner=None):
             registry[qid] = e
     except Exception as exc:
         problems.append("%s: %s: %s" % (rel_path, type(exc).__name__, exc))
+
+
+def add_person_c(registry, problems):
+    """Automatic scan of Person C's folders, then the manual OTHER_REGISTRIES."""
+    seen = set()
+    for pattern in PERSON_C_PATTERNS:
+        for path in sorted(glob.glob(os.path.join(ROOT, pattern))):
+            if os.path.basename(path) in IGNORED_FILES:
+                continue
+            rel_path = os.path.relpath(path, ROOT)
+            seen.add(rel_path)
+            add_registry(registry, problems, rel_path,
+                         "c_" + rel_path.replace(os.sep, "_")[:-3],
+                         owner="Person C", required=False)
+    for rel_path, owner in OTHER_REGISTRIES:
+        if rel_path in seen:
+            continue
+        add_registry(registry, problems, rel_path, "other_" + os.path.basename(rel_path), owner)
 
 
 def add_siham(registry, problems):
@@ -161,9 +198,54 @@ def build_registry():
     add_registry(registry, problems, "queries/btissam_queries/transactional.py", "b_transactional")
     add_registry(registry, problems, "queries/btissam_queries/analytics.py", "b_analytics")
     add_siham(registry, problems)
-    for rel_path, owner in OTHER_REGISTRIES:
-        add_registry(registry, problems, rel_path, "other_" + os.path.basename(rel_path), owner)
+    add_person_c(registry, problems)
     return registry, problems
+
+
+# ------------------------------------------------------------------ spark results
+def read_spark_csv():
+    """Reads results/spark_results.csv written by spark_queries.py.
+    Handles UTF-8 and UTF-16 (PowerShell '>' often writes UTF-16) and ignores log lines.
+    Returns {id: row} (empty dict if the file does not exist)."""
+    if not os.path.exists(SPARK_CSV):
+        return {}
+    with open(SPARK_CSV, "rb") as f:
+        raw = f.read()
+    text = None
+    for encoding in ("utf-8-sig", "utf-16"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeError:
+            text = None
+    if text is None:
+        text = raw.decode("latin-1")
+    lines = text.splitlines()
+    header_at = next((i for i, l in enumerate(lines) if l.startswith("id,repeats")), None)
+    if header_at is None:
+        return {}
+    kept = [l for l in lines[header_at:] if l.strip() and not l.startswith(" ")]
+    reader = csv.DictReader(io.StringIO("\n".join(kept)))
+    return {r["id"]: r for r in reader if r.get("id")}
+
+
+def merge_spark(rows):
+    """Fills the S26-S30 lines (status 'missing') with the numbers measured by Spark."""
+    spark_rows = read_spark_csv()
+    for row in rows:
+        s = spark_rows.get(row["id"])
+        if not s:
+            continue
+        try:
+            row.update({"status": "ok", "repeats": int(s["repeats"]),
+                        "median_ms": float(s["median_ms"]), "mean_ms": float(s["mean_ms"]),
+                        "min_ms": float(s["min_ms"]), "max_ms": float(s["max_ms"]),
+                        "result": "%s rows" % s["rows"]})
+            print("%-4s %-9s %10.2f %10.2f %10s %10.2f %10.2f  %s  (from spark_results.csv)"
+                  % (row["id"], row["owner"], row["mean_ms"], row["median_ms"], "-",
+                     row["min_ms"], row["max_ms"], row["result"]))
+        except (KeyError, ValueError) as exc:
+            row["status"] = "error: bad spark_results.csv (%s)" % exc
 
 
 # ------------------------------------------------------------------ measuring
@@ -251,6 +333,9 @@ def main():
             db["vehicles"].update_one({"_id": "V0001"},
                                       {"$set": {"last_position": original.get("last_position")}})
 
+    # S26-S30: numbers measured in the Spark container (read from results/spark_results.csv)
+    merge_spark([r for r in rows if r["status"] == "missing" and r["id"].startswith("S")])
+
     out_dir = os.path.join(ROOT, "results")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "benchmark_results.csv")
@@ -266,7 +351,10 @@ def main():
     missing = [r["id"] for r in rows if r["status"] == "missing"]
     errors = [r["id"] for r in rows if r["status"].startswith("error")]
     if missing:
-        print("Missing (not written yet, or not registered): " + ", ".join(missing))
+        hint = ""
+        if any(m.startswith("S") for m in missing):
+            hint = "  (S26-S30: run spark_queries.py first to create results/spark_results.csv)"
+        print("Missing (not written yet, or not registered): " + ", ".join(missing) + hint)
     if errors:
         print("Errors: " + ", ".join(errors))
     for p in problems:

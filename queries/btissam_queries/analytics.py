@@ -6,6 +6,10 @@ Run from the root of the repo (replica set running, data generated):
     python queries/btissam_queries/analytics.py
 
 The QUERIES dict at the bottom lets benchmark.py call every query the same way.
+
+Field names assumed (check docs/schema.md): driving_events.type / driver_id,
+missions.planned_start / planned_end / actual_end / distance_km / depot / status,
+positions.speed / vehicle_id, vehicles.type.
 """
 import os
 import sys
@@ -25,6 +29,7 @@ db = client[config.MONGO_DB]
 
 # centre of the Casablanca depot, GeoJSON order: [longitude, latitude]
 CASABLANCA = [-7.5898, 33.5731]
+SPEEDING_TYPE = "speeding"     # value of driving_events.type for a speeding event
 
 
 def timed(label, func, *args):
@@ -36,27 +41,27 @@ def timed(label, func, *args):
 
 
 # ------------------------------------------------------------------ A16
-def a16_fleet_by_depot_and_type():
-    """Number of vehicles and average capacity per depot and vehicle type."""
+def a16_missions_per_day(days=30):
+    """Number of missions and total distance per day over the last N days."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     pipeline = [
+        {"$match": {"planned_start": {"$gte": since}}},
         {"$group": {
-            "_id": {"depot": "$depot", "type": "$type"},
-            "vehicles": {"$sum": 1},
-            "avg_capacity": {"$avg": "$capacity"},
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$planned_start"}},
+            "missions": {"$sum": 1},
+            "total_km": {"$sum": "$distance_km"},
         }},
-        {"$sort": {"_id.depot": 1, "_id.type": 1}},
+        {"$sort": {"_id": 1}},
     ]
-    return list(db["vehicles"].aggregate(pipeline))
+    return list(db["missions"].aggregate(pipeline))
 
 
 # ------------------------------------------------------------------ A17
-def a17_top_drivers_by_events(limit=10, event_type=None):
-    """Top drivers by number of driving events (all types, or only one type).
+def a17_top_drivers_speeding(limit=10, event_type=SPEEDING_TYPE):
+    """Top drivers by number of speeding events.
     $lookup brings the driver name from the drivers collection."""
-    pipeline = []
-    if event_type:
-        pipeline.append({"$match": {"type": event_type}})
-    pipeline += [
+    pipeline = [
+        {"$match": {"type": event_type}},
         {"$group": {"_id": "$driver_id", "events": {"$sum": 1}}},
         {"$sort": {"events": -1}},
         {"$limit": limit},
@@ -69,20 +74,9 @@ def a17_top_drivers_by_events(limit=10, event_type=None):
 
 
 # ------------------------------------------------------------------ A18
-def a18_missions_by_depot_and_status():
-    """Number of missions per depot and status. Uses the index { depot, status }."""
-    pipeline = [
-        {"$group": {"_id": {"depot": "$depot", "status": "$status"},
-                    "missions": {"$sum": 1}}},
-        {"$sort": {"_id.depot": 1, "_id.status": 1}},
-    ]
-    return list(db["missions"].aggregate(pipeline))
-
-
-# ------------------------------------------------------------------ A19
-def a19_late_missions_by_depot():
+def a18_late_missions_by_depot():
     """Punctuality per depot: among completed missions, how many ended after their
-    planned end, and the average delay in minutes (negative = early)."""
+    planned end, the late rate and the average delay in minutes (negative = early)."""
     pipeline = [
         {"$match": {"status": "completed"}},
         {"$project": {
@@ -100,6 +94,28 @@ def a19_late_missions_by_depot():
         {"$sort": {"late_rate": -1}},
     ]
     return list(db["missions"].aggregate(pipeline))
+
+
+# ------------------------------------------------------------------ A19
+def a19_avg_speed_by_vehicle_type():
+    """Average speed per vehicle type. Positions are first summed per vehicle (small
+    result), then $lookup brings the type from vehicles, then a weighted average
+    is computed per type."""
+    pipeline = [
+        {"$group": {"_id": "$vehicle_id",
+                    "speed_sum": {"$sum": "$speed"},
+                    "n": {"$sum": 1}}},
+        {"$lookup": {"from": "vehicles", "localField": "_id",
+                     "foreignField": "_id", "as": "vehicle"}},
+        {"$unwind": "$vehicle"},
+        {"$group": {"_id": "$vehicle.type",
+                    "speed_sum": {"$sum": "$speed_sum"},
+                    "positions": {"$sum": "$n"}}},
+        {"$project": {"positions": 1,
+                      "avg_speed": {"$divide": ["$speed_sum", "$positions"]}}},
+        {"$sort": {"_id": 1}},
+    ]
+    return list(db["positions"].aggregate(pipeline, allowDiskUse=True))
 
 
 # ------------------------------------------------------------------ A20
@@ -125,10 +141,10 @@ def a20_vehicles_near_point(point=CASABLANCA, max_km=5, days=30, limit=10):
 
 # For benchmark.py: id -> (function, arguments)
 QUERIES = {
-    "A16": (a16_fleet_by_depot_and_type, ()),
-    "A17": (a17_top_drivers_by_events, ()),
-    "A18": (a18_missions_by_depot_and_status, ()),
-    "A19": (a19_late_missions_by_depot, ()),
+    "A16": (a16_missions_per_day, ()),
+    "A17": (a17_top_drivers_speeding, ()),
+    "A18": (a18_late_missions_by_depot, ()),
+    "A19": (a19_avg_speed_by_vehicle_type, ()),
     "A20": (a20_vehicles_near_point, ()),
 }
 
