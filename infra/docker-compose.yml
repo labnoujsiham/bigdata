@@ -15,7 +15,7 @@ services:
     container_name: mongo2
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
     ports:
-      - "27018:27018"
+      - "27018:27018" #laptop:container
     volumes:
       - mongo2-data:/data/db
     networks:
