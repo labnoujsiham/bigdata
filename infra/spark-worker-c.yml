@@ -1,0 +1,19 @@
+services:
+  spark-worker-c:
+    image: apache/spark:3.5.3-python3
+    container_name: spark-worker-c
+    hostname: spark-worker-c
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      - SPARK_LOCAL_HOSTNAME=spark-worker-c
+      - SPARK_WORKER_PORT=8881
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+    ports:
+      - "8881:8881"
+      - "8081:8081"
+      - "7079:7079"
+    extra_hosts:
+      - "spark-master:192.168.141.32"
+      - "spark-worker-a:192.168.141.32"
+      - "spark-worker-b:192.168.141.60"
