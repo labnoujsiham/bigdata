@@ -1,0 +1,5 @@
+﻿:: loading settings :: url = jar:file:/opt/spark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
+id,repeats,median_ms,mean_ms,min_ms,max_ms,rows
+A22,10,2958.79,3857.83,1532.59,15254.80,24
+A23,10,1319.33,1377.83,1031.75,1682.85,4
+S27,10,1696.24,1833.42,1476.33,3128.11,24

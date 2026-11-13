@@ -1,0 +1,4 @@
+id,query,native_ms,spark_ms,spark_over_native,rows_native,rows_spark
+A22,Events per depot and type ($lookup / join),1193.51,2958.79,2.5,24,24
+A23,Maintenance cost per vehicle type ($lookup / join),143.57,1319.33,9.2,4,4
+S27,"Average speed per hour (162,000 positions)",197.22,1696.24,8.6,24,24
