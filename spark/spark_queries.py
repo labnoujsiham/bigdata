@@ -184,6 +184,7 @@ def main():
          .config("spark.sql.session.timeZone", "UTC")
          .getOrCreate())
     spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("OFF")
 
     print("id,repeats,median_ms,mean_ms,min_ms,max_ms,rows")
     for qid in wanted:
