@@ -14,6 +14,13 @@ The CSV (id, median...) goes to stdout; Spark logs and result samples go to stde
 For every query: 1 warm-up run (absorbs Spark start-up and schema inference),
 then N timed runs, like benchmarks/benchmark.py.
 """
+
+import os
+os.environ["HADOOP_HOME"] = r"C:\hadoop"
+os.environ["PATH"] = r"C:\hadoop\bin;" + os.environ["PATH"]
+import os
+os.environ["JAVA_HOME"] = r"C:\Program Files\Eclipse Adoptium\jdk-17.0.21.9-hotspot"
+os.environ["PATH"] = os.environ["JAVA_HOME"] + r"\bin;" + os.environ["PATH"]
 import argparse
 import statistics
 import sys
@@ -171,9 +178,11 @@ def main():
     wanted = [x.strip().upper() for x in args.only.split(",") if x.strip()] or list(QUERIES)
 
     spark = (SparkSession.builder.appName("fleet-spark-queries")
-             .config("spark.mongodb.read.connection.uri", URI)
-             .config("spark.sql.session.timeZone", "UTC")
-             .getOrCreate())
+         .config("spark.jars.packages",
+                 "org.mongodb.spark:mongo-spark-connector_2.12:10.4.0")   # <- add this
+         .config("spark.mongodb.read.connection.uri", URI)
+         .config("spark.sql.session.timeZone", "UTC")
+         .getOrCreate())
     spark.sparkContext.setLogLevel("WARN")
 
     print("id,repeats,median_ms,mean_ms,min_ms,max_ms,rows")
