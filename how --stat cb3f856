@@ -1,0 +1,15 @@
+[33mcommit 42cd292858e1d46639d545b043698a8903e55642[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Merge: cb3f856 fa2623f
+Author: labnoujsiham <labnoujsiham17@gmail.com>
+Date:   Fri Nov 13 23:40:44 2026 +0000
+
+    Merge branch 'main' of https://github.com/labnoujsiham/bigdata
+
+ benchmarks/benchmark.py                     | 118 [32m++++++++[m[31m--[m
+ queries/btissam_queries/analytics.py        |  78 [32m++++[m[31m---[m
+ queries/btissam_queries/index_comparison.py |  20 [32m+[m[31m-[m
+ queries/btissam_queries/transactional.py    | 328 [32m+++++++++++++++++++[m[31m---------[m
+ results/benchmark_results.csv               |  60 [32m++[m[31m---[m
+ results/consistency_results.csv             |  10 [32m+[m[31m-[m
+ results/index_comparison.csv                |  13 [32m+[m[31m-[m
+ 7 files changed, 437 insertions(+), 190 deletions(-)

@@ -1,12 +1,18 @@
 """
-Native (MongoDB aggregation) vs Spark for A22, A23 and S27 (Person C).
+Native (MongoDB aggregation) vs Spark for A19, A22 and A23.
 
 1) Run spark/compare_spark.py first (it writes results/spark_compare.csv).
 2) From the root of the repo:  python benchmarks/compare_native.py
 Prints a table and saves results/native_vs_spark.csv.
 Native side: 1 warm-up run, then 10 timed runs, median.
+
+The native queries are the ones of the workload:
+  A19  queries/btissam_queries/analytics.py  (average speed per vehicle type)
+  A22  queries/c_queries/analytics.py        (events per type and day)
+  A23  queries/c_queries/analytics.py        (average fuel level per model)
 """
 import csv
+import importlib.util
 import os
 import re
 import statistics
@@ -19,25 +25,27 @@ sys.path.insert(0, os.path.join(ROOT, "queries", "c_queries"))
 
 import analytics as c          # A22, A23 (Person C); also opens the MongoDB connection
 
-db = c.db
+
+def load_module(name, relative_path):
+    """Loads a file under another name: both analytics.py files have the same name,
+    so a normal import would give us only one of them."""
+    spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, relative_path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+b = load_module("btissam_analytics", os.path.join("queries", "btissam_queries", "analytics.py"))
+
 REPEATS = 10
 
-
-def s27_native():
-    """Average speed of the moving fleet by hour of the day (UTC)."""
-    return list(db["positions"].aggregate([
-        {"$match": {"engine_state": "on"}},
-        {"$group": {"_id": {"$hour": "$ts"},
-                    "avg_speed_kmh": {"$avg": "$speed"},
-                    "n_positions": {"$sum": 1}}},
-        {"$sort": {"_id": 1}},
-    ]))
-
-
 PAIRS = [
-    ("A22", "Events per depot and type ($lookup / join)", c.a22_events_by_depot_and_type),
-    ("A23", "Maintenance cost per vehicle type ($lookup / join)", c.a23_maintenance_cost_by_vehicle_type),
-    ("S27", "Average speed per hour (162,000 positions)", s27_native),
+    ("A19", "Average speed per vehicle type (join with vehicles)",
+     b.a19_avg_speed_by_vehicle_type),
+    ("A22", "Driving events per type and day (no join)",
+     c.a22_events_by_type_and_day),
+    ("A23", "Average fuel level per model (join with vehicles)",
+     c.a23_avg_fuel_by_model),
 ]
 
 
@@ -76,6 +84,10 @@ if __name__ == "__main__":
         sp_rows = sp["rows"] if sp else "?"
         print("%-4s %-52s %10.2f %10s %8s %s/%s" % (
             qid, label, nat, "%.2f" % sp_ms if sp_ms else "-", ratio if ratio else "-", nat_rows, sp_rows))
+        if sp and str(nat_rows) != str(sp_rows):
+            print("     WARNING: %s returns %s rows natively but %s with Spark: the two "
+                  "queries do not compute the same thing, do not compare them yet."
+                  % (qid, nat_rows, sp_rows))
         table.append([qid, label, round(nat, 2), sp_ms, ratio, nat_rows, sp_rows])
     out_path = os.path.join(ROOT, "results", "native_vs_spark.csv")
     with open(out_path, "w", newline="", encoding="utf-8") as f:

@@ -1,8 +1,9 @@
 """
-Spark side of the native vs Spark comparison: A22, A23 and S27.
+Spark side of the native vs Spark comparison: A19, A22 and A23.
 
-The three queries are the same as the MongoDB pipelines in queries/c_queries/analytics.py
-(A22: events per type and day, A23: average fuel per model) and benchmarks/compare_native.py (S27), written with DataFrames and joins.
+The three queries are the same as the MongoDB pipelines (A19: average speed per vehicle
+type, A22: events per type and day, A23: average fuel per model), written with
+DataFrames and joins.
 1 warm-up run, then N timed runs. The CSV goes to stdout:
 
     docker exec spark-master /opt/spark/bin/spark-submit \
@@ -26,7 +27,18 @@ import time
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from spark_queries import URI, load, s27
+from spark_queries import URI, load
+
+
+def a19(spark):
+    """Average speed per vehicle type (every position weighs the same)."""
+    pos = load(spark, "positions").select("vehicle_id", "speed")
+    vehicles = load(spark, "vehicles").select(F.col("_id").alias("vehicle_id"), "type")
+    return (pos.join(vehicles, "vehicle_id")
+            .groupBy("type")
+            .agg(F.round(F.avg("speed"), 1).alias("avg_speed"),
+                 F.count("*").alias("positions"))
+            .orderBy("type").collect())
 
 
 def a22(spark):
@@ -49,7 +61,7 @@ def a23(spark):
             .orderBy("avg_fuel_level").collect())
 
 
-QUERIES = {"A22": a22, "A23": a23, "S27": s27}
+QUERIES = {"A19": a19, "A22": a22, "A23": a23}
 
 
 def main():

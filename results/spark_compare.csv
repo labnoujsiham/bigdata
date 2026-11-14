@@ -1,8 +1,5 @@
-﻿:: loading settings :: url = jar:file:/C:/fleet-telematics/.venv/Lib/site-packages/pyspark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
+﻿:: loading settings :: url = jar:file:/opt/spark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
 id,repeats,median_ms,mean_ms,min_ms,max_ms,rows
-A22,10,857.66,888.09,699.30,1237.49,124
-A23,10,3825.74,3919.04,3463.57,4429.98,14
-S27,10,1616.77,1638.64,1415.35,1949.64,1975
-SUCCESS: The process with PID 18700 (child process of PID 31344) has been terminated.
-SUCCESS: The process with PID 31344 (child process of PID 18800) has been terminated.
-SUCCESS: The process with PID 18800 (child process of PID 20396) has been terminated.
+A19,3,2528.67,2557.76,2188.70,2955.92,4
+A22,3,662.80,667.36,612.30,726.98,123
+A23,3,2442.83,2596.71,2190.60,3156.70,14
