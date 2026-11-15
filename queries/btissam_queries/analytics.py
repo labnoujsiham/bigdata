@@ -1,16 +1,3 @@
-"""
-A16 to A20: analytics queries with aggregation pipelines (Person B).
-(A21 to A23 belong to Person C, A24 and A25 to Siham.)
-
-Run from the root of the repo (replica set running, data generated):
-    python queries/btissam_queries/analytics.py
-
-The QUERIES dict at the bottom lets benchmark.py call every query the same way.
-
-Field names assumed (check docs/schema.md): driving_events.type / driver_id,
-missions.planned_start / planned_end / actual_end / distance_km / depot / status,
-positions.speed / vehicle_id, vehicles.type.
-"""
 import os
 import sys
 import time

@@ -1,25 +1,3 @@
-"""
-T1 to T15: transactional queries (Person B).
-
-Run from the root of the repo (replica set running, data generated):
-    python queries/btissam_queries/transactional.py
-
-Every query is a function. The QUERIES dict at the bottom lets benchmark.py
-call all of them the same way: QUERIES["T5"] = (function, arguments).
-
-Write queries can be run many times without breaking the data:
-T6 uses an upsert on a fixed test mission, T7 and T8 only update that mission,
-T2 / T12 add test data that cleanup_t2() / cleanup_t12() remove (done in __main__),
-T9 / T11 insert one document per run, T14 only touches a test device.
-
-Field names assumed (check docs/schema.md and adjust the constants below if needed):
-  positions:      vehicle_id, device_id, ts, loc, speed, heading, fuel_level, engine_state
-  driving_events: driver_id, vehicle_id, ts, type, severity
-  maintenance:    vehicle_id, date, type, cost
-  vehicles:       _id, plate, type, model, depot, equipment, last_position
-
-Run T13 last: it makes MongoDB delete the positions older than 60 days.
-"""
 import os
 import sys
 import time
@@ -28,8 +6,7 @@ from datetime import datetime, timedelta, timezone
 # allow "import config" even though this file lives in queries/btissam_queries/
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from pymongo import MongoClient, ASCENDING
-from pymongo.errors import OperationFailure
+from pymongo import MongoClient
 
 import config
 
@@ -38,9 +15,7 @@ client.admin.command("ping")   # connect first, so the connection time is not co
 db = client[config.MONGO_DB]
 
 TEST_MISSION_ID = "M_B_TEST"
-TEST_DEVICE_ID = "DEV_FAULTY_TEST"     # T14 deletes the positions of this device only
 BATCH_VEHICLE_ID = "V_BATCH_TEST"      # T2 inserts its 10 000 positions under this id
-EQUIPMENT_PREFIX = "gps_backup_"       # T12 adds equipment with this prefix (test data)
 SPEEDING_TYPE = "speeding"             # value of driving_events.type for a speeding event
 
 
@@ -256,78 +231,6 @@ def explain_t10(driver_id="D0001", days=7):
         db["missions"].find(_t10_filter(driver_id, days)).sort("planned_start", -1))
 
 
-# ------------------------------------------------------------------ T11
-def t11_record_maintenance(vehicle_id="V0001", maint_type="oil_change", cost=450.0):
-    """T11: record a maintenance operation on a vehicle."""
-    result = db["maintenance"].insert_one({
-        "vehicle_id": vehicle_id,
-        "date": datetime.now(timezone.utc),
-        "type": maint_type,
-        "cost": cost,
-    })
-    return str(result.inserted_id)
-
-
-# ------------------------------------------------------------------ T12
-def t12_add_equipment(vehicle_id="V0001", equipment=None):
-    """T12: add a piece of equipment to a vehicle ($addToSet: no duplicate).
-    The name is unique at every run, so the update really writes something.
-    cleanup_t12() removes the test equipment."""
-    equipment = equipment or "%s%d" % (EQUIPMENT_PREFIX, time.time_ns())
-    result = db["vehicles"].update_one(
-        {"_id": vehicle_id},
-        {"$addToSet": {"equipment": equipment}},
-    )
-    return result.modified_count
-
-
-def cleanup_t12(vehicle_id="V0001"):
-    """Removes the test equipment added by T12 (not timed). Also removes the old
-    'gps_tracker_backup' value added by the first version of T12."""
-    result = db["vehicles"].update_one(
-        {"_id": vehicle_id},
-        {"$pull": {"equipment": {"$regex": "^(%s|gps_tracker_backup)" % EQUIPMENT_PREFIX}}},
-    )
-    return result.modified_count
-
-
-# ------------------------------------------------------------------ T13
-def t13_ttl_positions(days=60):
-    """T13: automatic expiry of positions after 60 days (TTL index on ts).
-    MongoDB deletes the documents itself, in the background (about once a minute).
-    If a plain index on ts already exists (ts_1), it is converted to a TTL index
-    with collMod, because MongoDB refuses two indexes on the same key.
-    Run it last: it deletes the positions older than 60 days."""
-    seconds = days * 24 * 3600
-    try:
-        return db["positions"].create_index(
-            [("ts", ASCENDING)], expireAfterSeconds=seconds, name="ts_ttl_60d")
-    except OperationFailure:
-        db.command({"collMod": "positions",
-                    "index": {"keyPattern": {"ts": 1}, "expireAfterSeconds": seconds}})
-        return "ts_1 converted to TTL"
-
-
-# ------------------------------------------------------------------ T14
-def t14_delete_device_positions(device_id=TEST_DEVICE_ID, days=7):
-    """T14: delete the positions of a faulty GPS device over a period.
-    The default device is a test one, so real data is not touched."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    result = db["positions"].delete_many(
-        {"device_id": device_id, "ts": {"$gte": since}})
-    return result.deleted_count
-
-
-# ------------------------------------------------------------------ T15
-def t15_missions_in_progress(depot="Casablanca"):
-    """T15: missions in progress of a depot. Uses the index { depot, status }."""
-    cursor = db["missions"].find(
-        {"depot": depot, "status": "in_progress"},
-        {"vehicle_id": 1, "driver_id": 1, "planned_start": 1, "actual_start": 1},
-    )
-    return list(cursor)
-
-
 # ------------------------------------------------------------------ helpers
 def _sample_vehicle_with_positions():
     doc = db["positions"].find_one({}, {"vehicle_id": 1})
@@ -365,16 +268,11 @@ QUERIES = {
     "T8": (t8_assign_driver, ()),
     "T9": (t9_record_driving_event, ()),
     "T10": (t10_driver_missions_week, (DRIVER,)),
-    "T11": (t11_record_maintenance, ()),
-    "T12": (t12_add_equipment, ()),
-    "T13": (t13_ttl_positions, ()),
-    "T14": (t14_delete_device_positions, ()),
-    "T15": (t15_missions_in_progress, ()),
 }
 
 
 if __name__ == "__main__":
-    # python queries/btissam_queries/transactional.py          -> all queries
+    # python queries/btissam_queries/transactional.py          -> all queries (T1 to T10)
     # python queries/btissam_queries/transactional.py T5 T6    -> only these ones
     # Keep the order T6, T7, T8 when you run them one by one: T7 and T8 work on the
     # mission created by T6.
@@ -387,8 +285,6 @@ if __name__ == "__main__":
         result = timed(qid, func, *args)
         if qid == "T2":
             print("   ->", result, "positions inserted, cleaned:", cleanup_t2())
-        elif qid == "T12":
-            print("   ->", result, "(test equipment removed:", cleanup_t12(), ")")
         elif isinstance(result, list):
             print("   ->", len(result), "documents")
         else:
