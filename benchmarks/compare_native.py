@@ -1,16 +1,4 @@
-"""
-Native (MongoDB aggregation) vs Spark for A19, A22 and A23.
 
-1) Run spark/compare_spark.py first (it writes results/spark_compare.csv).
-2) From the root of the repo:  python benchmarks/compare_native.py
-Prints a table and saves results/native_vs_spark.csv.
-Native side: 1 warm-up run, then 10 timed runs, median.
-
-The native queries are the ones of the workload:
-  A19  queries/btissam_queries/analytics.py  (average speed per vehicle type)
-  A22  queries/c_queries/analytics.py        (events per type and day)
-  A23  queries/c_queries/analytics.py        (average fuel level per model)
-"""
 import csv
 import importlib.util
 import os

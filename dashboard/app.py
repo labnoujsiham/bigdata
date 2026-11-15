@@ -1,21 +1,4 @@
-"""
-Fleet telematics dashboard (Person C).
 
-Run from the root of the repo (replica set running, data generated):
-    streamlit run dashboard/app.py
-
-Tab 1 reads MongoDB directly (A21: silent vehicles, A22: events per type and day,
-A23: average fuel level per model). Tab 2 reads the results written by Spark
-(collections spark_s26 ... spark_s30, created by: spark_queries.py --save).
-Tab 3 reads the timing files in results/.
-
-Spark result columns expected by tab 2:
-    S26: vehicle_id, day, km, n_positions
-    S27: rank, driver_id, name, km, n_events, penalty_points, score_per_100km
-    S28: vehicle_id, driver_id, mission_id, start, duration_min, lat, lon
-    S29: vehicle_id, ts, lat, lon, implied_kmh
-    S30: vehicle_id, depot, start, duration_min, fuel_drop, litres
-"""
 import io
 import os
 import re

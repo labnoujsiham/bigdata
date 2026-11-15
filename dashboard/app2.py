@@ -1,13 +1,4 @@
-"""
-Streamlit demo of T11, T12 and T13 (maintenance, equipment, TTL expiry).
 
-Run from the root of the repo (replica set running, data generated, .env present):
-    streamlit run dashboard/app_t11_t13.py
-
-  T11  record a maintenance           -> insert into `maintenances`
-  T12  add an equipment to a vehicle  -> $addToSet on vehicles.equipment
-  T13  automatic expiry of positions  -> TTL index on positions.ts (60 days)
-"""
 import os
 import sys
 import time

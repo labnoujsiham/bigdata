@@ -1,18 +1,10 @@
-"""
-Data generator for the fleet telematics project (MongoDB).
 
-Run from the root of the repo (with the replica set running):
-    python data/generate_data.py
-
-WARNING: it DROPS and recreates the 6 project collections in the database.
-"""
 import math
 import os
 import random
 import sys
 from datetime import datetime, timedelta, timezone
 
-# allow "import config" even though this file lives in data/
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from faker import Faker
@@ -94,7 +86,6 @@ def bearing_deg(lat1, lon1, lat2, lon2):
 
 
 def point(lat, lon):
-    # GeoJSON: [longitude, latitude]
     return {"type": "Point", "coordinates": [round(lon, 6), round(lat, 6)]}
 
 
@@ -159,7 +150,6 @@ for d in drivers:
     drivers_by_depot[d["depot"]].append(d["_id"])
     driver_depot[d["_id"]] = d["depot"]
     driver_ids.append(d["_id"])
-    # some drivers are much "worse" than others (makes the top 10 meaningful)
     driver_weights.append(random.random() ** 3 + 0.02)
 
 # ---------------------------------------------------------------- missions
@@ -252,7 +242,7 @@ def trace_for_mission(m, with_stop, with_theft, with_jump):
     n = int((m["distance_km"] / avg_speed) * 3600 // 30)
     heading = bearing_deg(o_lat, o_lon, d_lat, d_lon)
 
-    steps = []   # [lat, lon, speed, engine]
+    steps = []   
     for i in range(n + 1):
         t = i / n
         steps.append([
@@ -266,7 +256,7 @@ def trace_for_mission(m, with_stop, with_theft, with_jump):
     stop_last = -1
     if with_stop:
         mid = n // 2
-        stop_count = random.randint(70, 120)      # 35 to 60 minutes
+        stop_count = random.randint(70, 120)      
         s_lat = steps[mid][0]
         s_lon = steps[mid][1]
         stop_steps = []
@@ -298,7 +288,6 @@ def trace_for_mission(m, with_stop, with_theft, with_jump):
             "engine_state": s[3],
         })
 
-    # keep the mission consistent with its trace
     m["actual_end"] = start + timedelta(seconds=30 * (len(steps) - 1))
 
 
@@ -308,13 +297,13 @@ for m in missions:
         candidates.append(m)
 random.shuffle(candidates)
 traced = []
-busy = {}   # vehicle id -> list of (start, end) already traced
+busy = {}   
 for m in candidates:
     if len(traced) == N_TRACED_MISSIONS:
         break
     vid = m["vehicle_id"]
     start = m["actual_start"]
-    end = m["actual_end"] + timedelta(minutes=70)   # room for a possible stop
+    end = m["actual_end"] + timedelta(minutes=70)  
     overlap = False
     if vid in busy:
         for other_start, other_end in busy[vid]:
@@ -343,7 +332,6 @@ for m in traced:
                       m["_id"] in theft_ids,
                       m["_id"] in jump_ids)
 
-# a few very recent positions (so that A21 "no position for 1 h" is meaningful)
 for v in random.sample(vehicles, N_LIVE_VEHICLES):
     lat0, lon0 = DEPOTS[v["depot"]]
     lat, lon = random_near(lat0, lon0, 0.2)
@@ -360,7 +348,6 @@ for v in random.sample(vehicles, N_LIVE_VEHICLES):
         "engine_state": "on" if speed > 0 else "off",
     })
 
-# latest known position stored inside each vehicle
 last_pos = {}
 for p in positions:
     vid = p["vehicle_id"]

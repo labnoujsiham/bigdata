@@ -8,7 +8,6 @@ from common import db, timed
 
 
 def run():
-    # creates the TTL index (does nothing if it already exists)
     return db["positions"].create_index([("ts", ASCENDING)], expireAfterSeconds=60 * 86400)
 
 

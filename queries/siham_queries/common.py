@@ -2,7 +2,6 @@ import os
 import sys
 import time
 
-# this file is 3 levels below the repo root: queries/siham_queries/common.py
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
@@ -12,7 +11,7 @@ import config
 
 client = MongoClient(config.MONGO_URI)
 db = client[config.MONGO_DB]
-client.admin.command("ping")   # connect first, so the connection time is not counted
+client.admin.command("ping")   
 
 
 def timed(label, func, *args):

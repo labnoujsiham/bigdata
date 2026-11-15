@@ -1,16 +1,4 @@
-"""
-Consistency test for MongoDB (replica set of 3 nodes).
 
-Compares:
-  - WRITES: write concern w:1  vs  w:"majority"
-  - READS : read concern "local" vs "majority", and reading from the primary
-            vs from a secondary
-
-Run from the root of the repo (replica set running, data generated):
-    python benchmarks/consistency_test.py
-
-Results are printed and saved in results/consistency_results.csv
-"""
 import csv
 import os
 import random

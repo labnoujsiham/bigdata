@@ -6,11 +6,8 @@ from common import db, timed
 def run(days=183):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     pipeline = [
-        # 1. one row per vehicle, keeping the date of its latest maintenance
         {"$group": {"_id": "$vehicle_id", "last_maintenance": {"$max": "$date"}}},
-        # 2. keep only the vehicles whose latest maintenance is older than the cutoff
         {"$match": {"last_maintenance": {"$lt": cutoff}}},
-        # 3. oldest first
         {"$sort": {"last_maintenance": 1}},
     ]
     return list(db["maintenances"].aggregate(pipeline))

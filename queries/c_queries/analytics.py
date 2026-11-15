@@ -1,11 +1,4 @@
-"""
-A21 to A23: analytics queries with aggregation pipelines (Person C).
 
-Run from the root of the repo (replica set running, data generated):
-    python queries/c_queries/analytics.py
-
-The QUERIES dict at the bottom lets benchmark.py call every query the same way.
-"""
 from datetime import timedelta
 
 from common import db, timed
@@ -24,7 +17,7 @@ def a21_silent_vehicles():
         [{"$group": {"_id": None, "ts": {"$max": "$last_position.ts"}}}]))[0]["ts"]
     cutoff = newest - timedelta(hours=1)
     pipeline = [
-        # no position at all, or a last position older than one hour
+        
         {"$match": {"$or": [{"last_position": None},
                             {"last_position.ts": {"$lt": cutoff}}]}},
         {"$group": {"_id": "$depot", "silent_vehicles": {"$sum": 1}}},
