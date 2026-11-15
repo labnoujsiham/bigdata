@@ -1,26 +1,4 @@
-"""
-S26 to S30: Spark queries on the MongoDB data (Person C).
 
-Run inside the Spark container, from the root of the repo (replica set running,
-data generated). Example for all queries, 10 timed runs each:
-
-    docker exec spark-master /opt/spark/bin/spark-submit \
-      --master spark://spark-master:7077 --conf spark.jars.ivy=/tmp/.ivy \
-      --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-      /opt/spark-apps/spark_queries.py --repeats 10 > results/spark_results.csv
-
-Only some queries:  ... /opt/spark-apps/spark_queries.py --only S28,S30
-The CSV (id, median...) goes to stdout; Spark logs and result samples go to stderr.
-For every query: 1 warm-up run (absorbs Spark start-up and schema inference),
-then N timed runs, like benchmarks/benchmark.py.
-
-Queries (as in the cahier de charge):
-  S26  real km per vehicle and per day (Haversine between consecutive positions)
-  S27  driving score per driver (weighted events per 100 km) and ranking
-  S28  unplanned stops of more than 30 min during a mission (missions x positions)
-  S29  GPS anomalies: position jumps implying more than 200 km/h
-  S30  suspected fuel theft: drop of more than 20 % in 10 min, engine off
-"""
 
 import os
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
@@ -74,8 +52,7 @@ def by_vehicle():
 
 
 def stop_runs(spark, min_minutes):
-    """Periods where a vehicle stays stopped (engine off, speed 0) for at least
-    min_minutes. Gaps-and-islands: a new run starts whenever 'stopped' changes."""
+  
     w = by_vehicle()
     p = positions(spark).withColumn(
         "stopped", (F.col("engine_state") == "off") & (F.col("speed") == 0))
@@ -99,9 +76,7 @@ def stop_runs(spark, min_minutes):
 
 
 def positions_with_steps(spark):
-    """positions with the km of the step from the previous position of the same
-    vehicle. The first point, gaps of more than 60 s (between two missions) and
-    GPS jumps (more than 2 km in one step) are dropped."""
+    
     w = by_vehicle()
     return (positions(spark)
             .withColumn("dt_s", F.col("ts").cast("long") - F.lag(F.col("ts").cast("long")).over(w))
@@ -111,7 +86,7 @@ def positions_with_steps(spark):
 
 
 def missions_df(spark):
-    """missions that really took place (real start and end known)."""
+    
     return (load(spark, "missions")
             .filter(F.col("actual_start").isNotNull() & F.col("actual_end").isNotNull())
             .select(F.col("_id").alias("mission_id"), "vehicle_id", "driver_id",
@@ -120,7 +95,7 @@ def missions_df(spark):
 
 # ------------------------------------------------------------------ S26
 def s26(spark):
-    """Real km per vehicle and per day (Haversine between consecutive positions)."""
+   
     return (positions_with_steps(spark)
             .withColumn("day", F.to_date("ts"))
             .groupBy("vehicle_id", "day")
@@ -130,9 +105,7 @@ def s26(spark):
 
 # ------------------------------------------------------------------ S27
 def s27(spark):
-    """Driving score per driver = weighted events per 100 km, then ranking.
-    The km of a driver are the km driven by the vehicle during the driver's
-    missions. Rank 1 = best driver (lowest score)."""
+    
     m = missions_df(spark)
     p = positions_with_steps(spark)
     km = (p.join(m, (p.vehicle_id == m.vehicle_id)
@@ -161,8 +134,7 @@ def s27(spark):
 
 # ------------------------------------------------------------------ S28
 def s28(spark):
-    """Unplanned stops of more than 30 min during a mission: engine off and speed 0,
-    starting between the real start and the real end of a mission of the vehicle."""
+    
     stops = stop_runs(spark, 30)
     m = missions_df(spark)
     return (stops.join(m, (stops.vehicle_id == m.vehicle_id)
@@ -174,8 +146,7 @@ def s28(spark):
 
 # ------------------------------------------------------------------ S29
 def s29(spark):
-    """GPS anomalies: isolated positions (spikes). The speed needed to reach the
-    point from the previous one AND to leave it for the next one is above 200 km/h."""
+   
     w = by_vehicle()
     ts = F.col("ts").cast("long")
     p = (positions(spark)
@@ -223,8 +194,7 @@ QUERIES = {"S26": s26, "S27": s27, "S28": s28, "S29": s29, "S30": s30}
 
 # ------------------------------------------------------------------ main
 def save(spark, qid, rows):
-    """Writes the result of a query in MongoDB (collection spark_s26 ... spark_s30),
-    so that the Streamlit dashboard can read it."""
+    
     if rows:
         (spark.createDataFrame(rows).write.format("mongodb").mode("overwrite")
          .option("connection.uri", URI).option("database", DB)

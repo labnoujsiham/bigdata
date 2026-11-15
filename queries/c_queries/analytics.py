@@ -6,13 +6,7 @@ from common import db, timed
 
 # ------------------------------------------------------------------ A21
 def a21_silent_vehicles():
-    """Vehicles with no GPS position during the last hour (counted per depot).
-
-    Reads the embedded copy vehicles.last_position (no join with positions).
-    The reference time is the most recent position in the data, not the clock:
-    the data is generated once, so with the real clock every vehicle would look
-    silent a few hours after the generation.
-    """
+    
     newest = list(db["vehicles"].aggregate(
         [{"$group": {"_id": None, "ts": {"$max": "$last_position.ts"}}}]))[0]["ts"]
     cutoff = newest - timedelta(hours=1)
@@ -28,7 +22,7 @@ def a21_silent_vehicles():
 
 # ------------------------------------------------------------------ A22
 def a22_events_by_type_and_day():
-    """Driving events per event type and per day (UTC), with the average value."""
+    
     pipeline = [
         {"$group": {
             "_id": {"day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$ts"}},
@@ -44,13 +38,7 @@ def a22_events_by_type_and_day():
 
 # ------------------------------------------------------------------ A23
 def a23_avg_fuel_by_model():
-    """Average fuel level (% of the tank) per vehicle model, from all GPS positions.
-
-    Positions are first reduced to one row per vehicle (sum and count), so the
-    $lookup on vehicles only runs on ~1,500 documents, not on every position.
-    Sum and count are kept (not an average of averages) so that every position
-    weighs the same.
-    """
+   
     pipeline = [
         {"$group": {"_id": "$vehicle_id",
                     "fuel_sum": {"$sum": "$fuel_level"},
