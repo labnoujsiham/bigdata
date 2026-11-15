@@ -1,21 +1,3 @@
-"""
-With / without index comparison (Person B), using explain("executionStats").
-
-Run from the root of the repo (replica set running, data generated):
-    python queries/btissam_queries/index_comparison.py
-
-Three comparisons:
-  T5  positions of a vehicle     index { vehicle_id: 1, ts: -1 }
-  T10 missions of a driver       index { driver_id: 1, planned_start: 1 }
-  T6  vehicle by plate           NO index in the base schema: the script creates
-                                 { plate: 1 }, measures, and drops it at the end.
-
-"Without index" for T5 and T10 means a forced full scan: hint({"$natural": 1}).
-We do not drop the real indexes, because positions also has the TTL index on ts and
-MongoDB could use it instead of scanning, which would hide the effect we want to show.
-
-Results are printed and saved in results/index_comparison.csv.
-"""
 import csv
 import os
 import statistics
