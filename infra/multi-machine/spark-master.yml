@@ -14,8 +14,8 @@ services:
     volumes:
       - ../../spark:/opt/spark-apps
     extra_hosts:
-      - "spark-worker-b:192.168.141.60"
-      - "spark-worker-c:192.168.141.171"
+      - "spark-worker-b:192.168.192.60"
+      - "spark-worker-c:192.168.192.171"
 
   spark-worker-a:
     image: apache/spark:3.5.3-python3
@@ -32,7 +32,7 @@ services:
       - "8081:8081"
       - "7079:7079"
     extra_hosts:
-      - "spark-worker-b:192.168.141.60"
-      - "spark-worker-c:192.168.141.171"
+      - "spark-worker-b:192.168.192.60"
+      - "spark-worker-c:192.168.192.171"
     depends_on:
       - spark-master
